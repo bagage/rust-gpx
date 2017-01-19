@@ -23,5 +23,6 @@ pub fn build_cli() -> App<'static, 'static> {
             .long("time")
             .value_name("TIME_THRESHOLD")
             .help("Find best distance for this time in seconds")
-            .takes_value(true))
+            .takes_value(true)
+            .required_unless("distance"))
 }
