@@ -87,9 +87,8 @@ fn compute_best(points: &Vec<(Point, DateTime<UTC>)>,
     return best;
 }
 
-fn main() {
-    let matches = cli::build_cli().get_matches();
-    let document = Document::new_from_xml_file(matches.value_of("gpx-file").unwrap()).unwrap();
+fn analyze(gpx_file: &str, distance: f64, time: i64) {
+    let document = Document::new_from_xml_file(gpx_file).unwrap();
     let points: Vec<(Point, DateTime<UTC>)> = document.select_all("trkpt")
         .unwrap()
         .map(|el| {
@@ -104,7 +103,23 @@ fn main() {
         })
         .collect();
 
-    let distance_threshold = value_t!(matches, "distance", f64).unwrap_or(0.);
-    let time_threshold = value_t!(matches, "time", i64).unwrap_or(0);
+    let distance_threshold = distance;
+    let time_threshold = time;
     compute_best(&points, if time_threshold > 1 { Some(Duration::seconds(time_threshold)) } else { None }, distance_threshold);
+}
+
+fn merge(files: &str) { // &Vec<&str>) {
+}
+
+fn main() {
+    let matches = cli::build_cli().get_matches();
+
+    match matches.subcommand() {
+         ("analyze", Some(analyze_matches)) => analyze(analyze_matches.value_of("gpx-file").unwrap(),
+                value_t!(analyze_matches, "distance", f64).unwrap_or(0.),
+                value_t!(analyze_matches, "time", i64).unwrap_or(0)),
+        ("merge", Some(merge_matches)) => merge(merge_matches.value_of("gpx-files").unwrap()),
+        ("", None) => println!("No command requested"),
+        _ => unreachable!(),
+    }
 }
