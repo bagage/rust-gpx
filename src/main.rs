@@ -2,10 +2,15 @@ extern crate rquery;
 extern crate chrono;
 #[macro_use(value_t)]
 extern crate clap;
+extern crate xmltree;
 
 use rquery::Document;
 use chrono::*;
 use std::f64;
+
+use xmltree::Element;
+use std::fs::File;
+use std::io::prelude::*;
 
 mod cli;
 
@@ -108,7 +113,47 @@ fn analyze(gpx_file: &str, distance: f64, time: i64) {
     compute_best(&points, if time_threshold > 1 { Some(Duration::seconds(time_threshold)) } else { None }, distance_threshold);
 }
 
-fn merge(files: &str) { // &Vec<&str>) {
+fn merge(files: &Vec<&str>, output: &str) {
+    if files.len() < 2 {
+        println!("Expected at least 2 files, got {}", files.len());
+        return
+    }
+
+    // sort files by <time> metadata attribute
+    let mut sorted_files : Vec<(DateTime<UTC>, &str)> = Vec::new();
+    for file in files.iter() {
+        let document = Document::new_from_xml_file(file).unwrap();
+        let time = document.select("metadata").unwrap().select("time").unwrap().text().parse::<DateTime<UTC>>().unwrap();
+
+        let new_elem = (time, *file);
+        let pos = sorted_files.binary_search(&new_elem).unwrap_or_else(|e| e);
+        sorted_files.insert(pos, new_elem);
+    }
+
+    let mut f = File::open(sorted_files[0].1).unwrap();
+    let mut buffer_root = String::new();
+    f.read_to_string(&mut buffer_root);
+    let mut gpx_root = Element::parse(buffer_root.as_bytes()).unwrap();
+
+    for tuple in sorted_files.iter().skip(1) {
+        let mut trk = gpx_root.get_mut_child("trk").expect("Cannot find 'trk' XML element");
+        let mut f2 = File::open(tuple.1).unwrap();
+        let mut buffer_root2 = String::new();
+        f2.read_to_string(&mut buffer_root2);
+
+        let gpx_root2 = Element::parse(buffer_root2.as_bytes()).unwrap();
+        {
+            let trk2 = gpx_root2.get_child("trk").expect("Cannot find 'trk' XML element");
+            for trkpt2 in trk2.children.clone() {
+                trk.children.push(trkpt2);
+            }
+        }
+
+    }
+
+    let output_file = File::create(output).unwrap();
+    gpx_root.write(&output_file);
+    output_file.sync_all().unwrap();
 }
 
 fn main() {
@@ -118,7 +163,7 @@ fn main() {
          ("analyze", Some(analyze_matches)) => analyze(analyze_matches.value_of("gpx-file").unwrap(),
                 value_t!(analyze_matches, "distance", f64).unwrap_or(0.),
                 value_t!(analyze_matches, "time", i64).unwrap_or(0)),
-        ("merge", Some(merge_matches)) => merge(merge_matches.value_of("gpx-files").unwrap()),
+        ("merge", Some(merge_matches)) => merge(&merge_matches.values_of("gpx-files").unwrap().collect(), &merge_matches.value_of("output-file").unwrap()),
         ("", None) => println!("No command requested"),
         _ => unreachable!(),
     }
