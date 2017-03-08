@@ -3,6 +3,7 @@ extern crate chrono;
 #[macro_use(value_t)]
 extern crate clap;
 extern crate xmltree;
+extern crate regex;
 
 use rquery::Document;
 use chrono::*;
@@ -11,6 +12,8 @@ use std::f64;
 use xmltree::Element;
 use std::fs::File;
 use std::io::prelude::*;
+
+use regex::Regex;
 
 mod cli;
 
@@ -92,7 +95,7 @@ fn compute_best(points: &Vec<(Point, DateTime<UTC>)>,
     return best;
 }
 
-fn analyze(gpx_file: &str, distance: f64, time: i64) {
+fn analyze(gpx_file: &str, distance: str, time: str) {
     let document = Document::new_from_xml_file(gpx_file).unwrap();
     let points: Vec<(Point, DateTime<UTC>)> = document.select_all("trkpt")
         .unwrap()
@@ -108,9 +111,24 @@ fn analyze(gpx_file: &str, distance: f64, time: i64) {
         })
         .collect();
 
-    let distance_threshold = distance;
-    let time_threshold = time;
-    compute_best(&points, if time_threshold > 1 { Some(Duration::seconds(time_threshold)) } else { None }, distance_threshold);
+
+    if Some(distance) {
+        let distance_threshold = 0.;
+        // parse distance from human-readable syntax 1km or 100m to meters
+        if distance.ends_with("km") {
+            distance_threshold = 1000. * distance.truncate(distance.len() - 2).parse::<f64>();
+        } else if distance.ends_with("m") {
+            distance_threshold = distance.truncate(distance.len() - 1).parse::<f64>();
+        } else {
+            distance_threshold = distance.parse::<f64>();
+        }
+        compute_best(&points, None, distance_threshold);
+    } else {
+        let re = Regex::new(r"^\d{2}.\d{2}.\d{2}$").unwrap();
+        let group = re.captures_iter(time);
+        println!("{}", group[0]*3600+group[1]*60+group[2]);
+        compute_best(&points, Some(Duration::seconds(group[0]*3600+group[1]*60+group[2])), 0);
+    }
 }
 
 fn merge(files: &Vec<&str>, output: &str) {
@@ -161,8 +179,8 @@ fn main() {
 
     match matches.subcommand() {
          ("analyze", Some(analyze_matches)) => analyze(analyze_matches.value_of("gpx-file").unwrap(),
-                value_t!(analyze_matches, "distance", f64).unwrap_or(0.),
-                value_t!(analyze_matches, "time", i64).unwrap_or(0)),
+                analyze_matches.value_of("distance"),
+                analyze_matches.value_of("time")),
         ("merge", Some(merge_matches)) => merge(&merge_matches.values_of("gpx-files").unwrap().collect(), &merge_matches.value_of("output-file").unwrap()),
         ("", None) => println!("No command requested"),
         _ => unreachable!(),
