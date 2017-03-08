@@ -5,10 +5,10 @@ authors = ["Gautier Pelloux-Prayer <gautier@damsy.net>"]
 build = "build.rs"
 
 [build-dependencies]
-clap = "2.19.3"
+clap = "*"
 
 [dependencies]
-rquery = "0.3.1"
-chrono = "0.2.25"
-clap = "2.19.3"
-xmltree = "0.3"
+rquery = "*"
+chrono = "*"
+clap = "*"
+xmltree = "*"
