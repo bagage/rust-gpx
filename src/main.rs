@@ -32,6 +32,15 @@ fn distance(a: &Point, b: &Point) -> f64 {
     return d;
 }
 
+fn format_duration(d: i64) -> String {
+    let hour = d as i64 / 3600;
+    let min = (d as i64 % 3600) / 60;
+    let sec = d as i64 % 60;
+    return format!("{}{}{}s", if hour > 0 { format!("{}h", hour) } else { "".to_string() },
+                                          if min > 0 { format!("{}m", min) } else { "".to_string() },
+                                          sec);
+}
+
 fn compute_best(points: &Vec<(Point, DateTime<UTC>)>,
                 time_threshold: Option<Duration>,
                 distance_threshold: f64)
@@ -85,9 +94,9 @@ fn compute_best(points: &Vec<(Point, DateTime<UTC>)>,
         }
     }
     if time_mode {
-        println!("Best for {}s time was {}m", time_threshold.unwrap().num_seconds(), best);
+        println!("Best for {} time was {}m", format_duration(time_threshold.unwrap().num_seconds()), best);
     } else {
-        println!("Best for {}m distance was {}s", distance_threshold, best);
+        println!("Best for {}m distance was {}", distance_threshold, format_duration(best as i64));
     }
     return best;
 }
