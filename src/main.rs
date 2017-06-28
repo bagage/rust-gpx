@@ -5,7 +5,9 @@ extern crate clap;
 extern crate xmltree;
 
 use rquery::Document;
+
 use chrono::*;
+
 use std::f64;
 
 use xmltree::Element;
@@ -17,6 +19,7 @@ mod cli;
 struct Point {
     lat: f64,
     lon: f64,
+    ele: f64,
 }
 
 fn distance(a: &Point, b: &Point) -> f64 {
@@ -41,16 +44,40 @@ fn format_duration(d: i64) -> String {
                                           sec);
 }
 
+fn compute_elevation(points: &Vec<(Point, DateTime<UTC>)>,
+                     start_time: DateTime<UTC>,
+                     end_time: DateTime<UTC>)
+                     -> [f64; 2] {
+                                // d+ first, then d-
+    let mut results : [f64; 2] = [0.; 2];
+
+    let mut i = points.iter();
+    let mut prev_ele = 0.0;
+    while let Some(v) = i.next() {
+        let (ref p1, time) = *v;
+        if time < start_time {
+            continue;
+        } else if time > end_time {
+            break;
+        }
+
+        if prev_ele != 0. {
+            let delta = p1.ele - prev_ele;
+            if delta > 0. { results[0] += delta; } else { results[1] += -delta; }
+        }
+        prev_ele = p1.ele;
+    }
+    return results;
+}
+
 fn compute_best(points: &Vec<(Point, DateTime<UTC>)>,
                 time_threshold: Option<Duration>,
                 distance_threshold: f64)
-                -> f64 {
+                -> (f64, [DateTime<UTC>; 2]) {
     let time_mode = time_threshold != None;
-    let mut best: f64 = if time_mode {
-        0.0
-    } else {
-        f64::INFINITY
-    };
+    //FIXME: proper Null initialization?
+    let mut best_interval : [DateTime<UTC>; 2] = ["2017-06-27T18:16:08Z".parse::<DateTime<UTC>>().unwrap(); 2];
+    let mut best: f64 = if time_mode { 0.0 } else { f64::INFINITY };
 
     let mut i = points.iter();
     while let Some(v) = i.next() {
@@ -73,8 +100,10 @@ fn compute_best(points: &Vec<(Point, DateTime<UTC>)>,
                     let alpha = (threshold - current_time) / this_time;
                     assert!(0. < alpha && alpha <= 1.);
                     current_distance += this_distance * alpha;
-
-                    best = best.max(current_distance);
+                    if current_distance > best {
+                        best = current_distance;
+                        best_interval = [time, time2];
+                    }
                     break;
                 }
             } else {
@@ -83,7 +112,10 @@ fn compute_best(points: &Vec<(Point, DateTime<UTC>)>,
                     let alpha = (threshold - current_distance) / this_distance;
                     assert!(0. < alpha && alpha <= 1.);
                     current_time += this_time * alpha;
-                    best = best.min(current_time);
+                    if current_time < best {
+                        best = current_time;
+                        best_interval = [time, time2];
+                    }
                     break;
                 }
             }
@@ -93,12 +125,7 @@ fn compute_best(points: &Vec<(Point, DateTime<UTC>)>,
             prev_point = p2;
         }
     }
-    if time_mode {
-        println!("Best for {} time was {}m", format_duration(time_threshold.unwrap().num_seconds()), best);
-    } else {
-        println!("Best for {}m distance was {}", distance_threshold, format_duration(best as i64));
-    }
-    return best;
+    return (best, best_interval);
 }
 
 fn analyze(gpx_file: &str, distance: f64, time: i64) {
@@ -108,10 +135,12 @@ fn analyze(gpx_file: &str, distance: f64, time: i64) {
         .map(|el| {
             let lat: f64 = el.attr("lat").unwrap().to_string().parse::<f64>().unwrap();
             let lon: f64 = el.attr("lon").unwrap().to_string().parse::<f64>().unwrap();
+            let ele: f64 = el.select("ele").unwrap().text().parse::<f64>().unwrap();
             let time = el.select("time").unwrap().text().parse::<DateTime<UTC>>().unwrap();
             (Point {
                  lat: lat,
                  lon: lon,
+                 ele: ele,
              },
              time)
         })
@@ -119,7 +148,14 @@ fn analyze(gpx_file: &str, distance: f64, time: i64) {
 
     let distance_threshold = distance;
     let time_threshold = time;
-    compute_best(&points, if time_threshold > 1 { Some(Duration::seconds(time_threshold)) } else { None }, distance_threshold);
+
+    let (best, best_interval) = compute_best(&points, if time_threshold > 1 { Some(Duration::seconds(time_threshold)) } else { None }, distance_threshold);
+    let ele = compute_elevation(&points, best_interval[0], best_interval[1]);
+    if time > 1 {
+        println!("Best for {} time was {}m ({:.0}d+ / {:.0}d-)", format_duration(time_threshold), best, ele[0], ele[1]);
+    } else {
+        println!("Best for {}m distance was {} ({:.0}d+ / {:.0}d-)", distance_threshold, format_duration(best as i64), ele[0], ele[1]);
+    }
 }
 
 fn merge(files: &Vec<&str>, output: &str) {
