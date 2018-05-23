@@ -8,7 +8,8 @@ build = "build.rs"
 clap = "*"
 
 [dependencies]
-rquery = "*"
-chrono = "*"
 clap = "*"
+rquery = "*"
+chrono = "0.4"
 xmltree = "*"
+gpx = "*"

@@ -3,12 +3,20 @@ extern crate chrono;
 #[macro_use(value_t)]
 extern crate clap;
 extern crate xmltree;
+extern crate gpx;
 
 use rquery::Document;
 
-use chrono::*;
+use chrono::prelude::Utc;
+use chrono::DateTime;
+use chrono::Duration;
 
+use std::io::BufReader;
 use std::f64;
+
+
+use gpx::read;
+use gpx::Gpx;
 
 use xmltree::Element;
 use std::fs::File;
@@ -44,9 +52,9 @@ fn format_duration(d: i64) -> String {
                                           sec);
 }
 
-fn compute_elevation(points: &Vec<(Point, DateTime<UTC>)>,
-                     start_time: DateTime<UTC>,
-                     end_time: DateTime<UTC>)
+fn compute_elevation(points: &Vec<(Point, DateTime<Utc>)>,
+                     start_time: DateTime<Utc>,
+                     end_time: DateTime<Utc>)
                      -> [f64; 2] {
                                 // d+ first, then d-
     let mut results : [f64; 2] = [0.; 2];
@@ -70,13 +78,13 @@ fn compute_elevation(points: &Vec<(Point, DateTime<UTC>)>,
     return results;
 }
 
-fn compute_best(points: &Vec<(Point, DateTime<UTC>)>,
+fn compute_best(points: &Vec<(Point, DateTime<Utc>)>,
                 time_threshold: Option<Duration>,
                 distance_threshold: f64)
-                -> (f64, [DateTime<UTC>; 2]) {
+                -> (f64, [DateTime<Utc>; 2]) {
     let time_mode = time_threshold != None;
     //FIXME: proper Null initialization?
-    let mut best_interval : [DateTime<UTC>; 2] = ["2017-06-27T18:16:08Z".parse::<DateTime<UTC>>().unwrap(); 2];
+    let mut best_interval : [DateTime<Utc>; 2] = ["2017-06-27T18:16:08Z".parse::<DateTime<Utc>>().unwrap(); 2];
     let mut best: f64 = if time_mode { 0.0 } else { f64::INFINITY };
 
     let mut i = points.iter();
@@ -130,13 +138,13 @@ fn compute_best(points: &Vec<(Point, DateTime<UTC>)>,
 
 fn analyze(gpx_file: &str, distance: f64, time: i64) {
     let document = Document::new_from_xml_file(gpx_file).unwrap();
-    let points: Vec<(Point, DateTime<UTC>)> = document.select_all("trkpt")
+    let points: Vec<(Point, DateTime<Utc>)> = document.select_all("trkpt")
         .unwrap()
         .map(|el| {
             let lat: f64 = el.attr("lat").unwrap().to_string().parse::<f64>().unwrap();
             let lon: f64 = el.attr("lon").unwrap().to_string().parse::<f64>().unwrap();
             let ele: f64 = el.select("ele").unwrap().text().parse::<f64>().unwrap();
-            let time = el.select("time").unwrap().text().parse::<DateTime<UTC>>().unwrap();
+            let time = el.select("time").unwrap().text().parse::<DateTime<Utc>>().unwrap();
             (Point {
                  lat: lat,
                  lon: lon,
@@ -165,16 +173,17 @@ fn merge(files: &Vec<&str>, output: &str) {
     }
 
     // sort files by <time> metadata attribute
-    let mut sorted_files : Vec<(DateTime<UTC>, &str)> = Vec::new();
-    for file in files.iter() {
-        let document = Document::new_from_xml_file(file).unwrap();
-        let time = match document.select("metadata") {
-            Ok(m) => m.select("time"),
-            Err(_) => document.select("trk").unwrap().select("trkseg").unwrap().select("trkpt").unwrap().select("time"),
-        }.unwrap().text().parse::<DateTime<UTC>>().unwrap();
+    let mut sorted_files : Vec<(DateTime<Utc>, &str)> = Vec::new();
+    for path in files.iter() {
+        let file = File::open(path).unwrap();
+        let gpx: Gpx = read(BufReader::new(file)).unwrap();
 
+        let time: DateTime<Utc> = match gpx.metadata { 
+            Some(m) => m.time,
+            None => gpx.tracks[0].segments[0].points[0].time,
+        }.unwrap();
 
-        let new_elem = (time, *file);
+        let new_elem = (time, *path);
         let pos = sorted_files.binary_search(&new_elem).unwrap_or_else(|e| e);
         sorted_files.insert(pos, new_elem);
     }
