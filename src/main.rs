@@ -14,6 +14,7 @@ use chrono::Duration;
 use std::io::BufReader;
 use std::f64;
 
+use std::collections::HashMap;
 
 use gpx::read;
 use gpx::Gpx;
@@ -136,6 +137,54 @@ fn compute_best(points: &Vec<(Point, DateTime<Utc>)>,
     return (best, best_interval);
 }
 
+fn info(gpx_file: &str) {
+    let file = File::open(gpx_file).unwrap();
+    let gpx: Gpx = read(BufReader::new(file)).unwrap();
+    
+    let gpxStats: HashMap<&str, f64> = HashMap::new();
+
+    println!("File: {file}", file=gpx_file);
+    for track in gpx.tracks {
+        for segment in track.segments {
+            let mut segmentStats: HashMap<&str, f64> = HashMap::new();
+
+            // let mut prev = &segment.points[0];
+            for point in segment.points {
+                // segmentStats.entry("Length 2D").or_insert(0) += distance(
+                //     Point {
+                //         lat: prev.point().lat(),
+                //         lon: prev.point().lng(),
+                //         ele: prev.elevation.unwrap_or(0.),
+                //     },
+                //     Point{
+                //         lat: point.point().lat(),
+                //         lon: point.point().lng(),
+                //         ele: point.elevation.unwrap_or(0.),
+                //     });
+                // segmentStats.entry("Moving time").or_insert(0) += point.time.timestamp() - prev.time.timestamp();
+                // segmentStats.entry("Stopped time").or_insert(0) += 0;
+                let maxSpeed = segmentStats.entry("Max speed").or_insert(0.);
+                *maxSpeed = maxSpeed.max(point.speed.unwrap_or(0.));
+                // segmentStats.entry("Total uphill").or_insert(0) += if point.elevation > 0 { point.elevation } else { 0 };
+                // segmentStats.entry("Total downhill").or_insert(0) += if point.elevation < 0 { -point.elevation } else { 0 };
+                // prev = point;
+            }
+            // segmentStats.insert("Started", segment.points.first().unwrap().time.unwrap().to_string());
+            // segmentStats.insert("Ended", segment.points.last().unwrap().time.unwrap().to_string());
+            // segmentStats.insert("Points", segment.points.len());
+            // segmentStats.insert("Avg distance between points", segmentStats.entry("Length 2D").or_insert(0.) / segmentStats.entry("Points"));
+
+            for (key, value) in segmentStats {
+                println!("\t\t{}: {}", key, value);
+            }
+
+        }
+    }
+    for (key, value) in gpxStats {
+        println!("\t{}: {}", key, value);
+    }
+}
+
 fn analyze(gpx_file: &str, distance: f64, time: i64) {
     let document = Document::new_from_xml_file(gpx_file).unwrap();
     let points: Vec<(Point, DateTime<Utc>)> = document.select_all("trkpt")
@@ -222,6 +271,7 @@ fn main() {
                 value_t!(analyze_matches, "distance", f64).unwrap_or(0.),
                 value_t!(analyze_matches, "time", i64).unwrap_or(0)),
         ("merge", Some(merge_matches)) => merge(&merge_matches.values_of("gpx-files").unwrap().collect(), &merge_matches.value_of("output-file").unwrap()),
+        ("info", Some(info_matches)) => info(info_matches.value_of("gpx-file").unwrap()),
         ("", None) => println!("No command requested"),
         _ => unreachable!(),
     }
