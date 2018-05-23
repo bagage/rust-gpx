@@ -168,7 +168,11 @@ fn merge(files: &Vec<&str>, output: &str) {
     let mut sorted_files : Vec<(DateTime<UTC>, &str)> = Vec::new();
     for file in files.iter() {
         let document = Document::new_from_xml_file(file).unwrap();
-        let time = document.select("metadata").unwrap().select("time").unwrap().text().parse::<DateTime<UTC>>().unwrap();
+        let time = match document.select("metadata") {
+            Ok(m) => m.select("time"),
+            Err(_) => document.select("trk").unwrap().select("trkseg").unwrap().select("trkpt").unwrap().select("time"),
+        }.unwrap().text().parse::<DateTime<UTC>>().unwrap();
+
 
         let new_elem = (time, *file);
         let pos = sorted_files.binary_search(&new_elem).unwrap_or_else(|e| e);
