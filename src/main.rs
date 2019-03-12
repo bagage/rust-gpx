@@ -208,11 +208,15 @@ fn analyze(gpx_file: &str, distance: f64, time: i64) {
 
     let (best, best_interval) = compute_best(&points, if time_threshold > 1 { Some(Duration::seconds(time_threshold)) } else { None }, distance_threshold);
     let ele = compute_elevation(&points, best_interval[0], best_interval[1]);
+    let mut message;
     if time > 1 {
-        println!("Best for {} time was {}m ({:.0}d+ / {:.0}d-) in interval {} - {}", format_duration(time_threshold), best, ele[0], ele[1], best_interval[0], best_interval[1]);
+    	message = format!("Best for {} time was {}m", format_duration(time_threshold), best);
     } else {
-        println!("Best for {}m distance was {} ({:.0}d+ / {:.0}d-) in interval {} - {}", distance_threshold, format_duration(best as i64), ele[0], ele[1], best_interval[0], best_interval[1]);
+    	message = format!("Best for {}m distance was {}", distance_threshold, format_duration(best as i64));
     }
+    println!("{} ({:.0}d+ / {:.0}d-) in interval {} - {} (start at {}).", 
+    		message, ele[0], ele[1], best_interval[0], best_interval[1], 
+        	format_duration(best_interval[0].signed_duration_since(points[0].1).num_seconds()));
 }
 
 fn merge(files: &Vec<&str>, output: &str) {
