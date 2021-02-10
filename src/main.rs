@@ -138,19 +138,25 @@ fn compute_best(points: &Vec<(Point, DateTime<Utc>)>,
 }
 
 fn info(gpx_file: &str) {
-    let file = File::open(gpx_file).unwrap();
-    let gpx: Gpx = read(BufReader::new(file)).unwrap();
-    
-    let gpxStats: HashMap<&str, f64> = HashMap::new();
+    let file = match File::open(gpx_file) {
+        Ok(file) => file,
+        Err(error) => panic!("Problem opening the file: {:?}", error),
+    };
+    let gpx = match read(BufReader::new(file)) {
+        Ok(gpx) => gpx,
+        Err(error) => panic!("Problem parsing the file: {:?}", error),
+    };
+
+    let gpx_stats: HashMap<&str, f64> = HashMap::new();
 
     println!("File: {file}", file=gpx_file);
     for track in gpx.tracks {
         for segment in track.segments {
-            let mut segmentStats: HashMap<&str, f64> = HashMap::new();
+            let mut segment_stats: HashMap<&str, f64> = HashMap::new();
 
             // let mut prev = &segment.points[0];
             for point in segment.points {
-                // segmentStats.entry("Length 2D").or_insert(0) += distance(
+                // segment_stats.entry("Length 2D").or_insert(0) += distance(
                 //     Point {
                 //         lat: prev.point().lat(),
                 //         lon: prev.point().lng(),
@@ -161,26 +167,26 @@ fn info(gpx_file: &str) {
                 //         lon: point.point().lng(),
                 //         ele: point.elevation.unwrap_or(0.),
                 //     });
-                // segmentStats.entry("Moving time").or_insert(0) += point.time.timestamp() - prev.time.timestamp();
-                // segmentStats.entry("Stopped time").or_insert(0) += 0;
-                let maxSpeed = segmentStats.entry("Max speed").or_insert(0.);
-                *maxSpeed = maxSpeed.max(point.speed.unwrap_or(0.));
-                // segmentStats.entry("Total uphill").or_insert(0) += if point.elevation > 0 { point.elevation } else { 0 };
-                // segmentStats.entry("Total downhill").or_insert(0) += if point.elevation < 0 { -point.elevation } else { 0 };
+                // segment_stats.entry("Moving time").or_insert(0) += point.time.timestamp() - prev.time.timestamp();
+                // segment_stats.entry("Stopped time").or_insert(0) += 0;
+                let max_speed = segment_stats.entry("Max speed").or_insert(0.);
+                *max_speed = max_speed.max(point.speed.unwrap_or(0.));
+                // segment_stats.entry("Total uphill").or_insert(0) += if point.elevation > 0 { point.elevation } else { 0 };
+                // segment_stats.entry("Total downhill").or_insert(0) += if point.elevation < 0 { -point.elevation } else { 0 };
                 // prev = point;
             }
-            // segmentStats.insert("Started", segment.points.first().unwrap().time.unwrap().to_string());
-            // segmentStats.insert("Ended", segment.points.last().unwrap().time.unwrap().to_string());
-            // segmentStats.insert("Points", segment.points.len());
-            // segmentStats.insert("Avg distance between points", segmentStats.entry("Length 2D").or_insert(0.) / segmentStats.entry("Points"));
+            // segment_stats.insert("Started", segment.points.first().unwrap().time.unwrap().to_string());
+            // segment_stats.insert("Ended", segment.points.last().unwrap().time.unwrap().to_string());
+            // segment_stats.insert("Points", segment.points.len());
+            // segment_stats.insert("Avg distance between points", segment_stats.entry("Length 2D").or_insert(0.) / segment_stats.entry("Points"));
 
-            for (key, value) in segmentStats {
+            for (key, value) in segment_stats {
                 println!("\t\t{}: {}", key, value);
             }
 
         }
     }
-    for (key, value) in gpxStats {
+    for (key, value) in gpx_stats {
         println!("\t{}: {}", key, value);
     }
 }
@@ -208,15 +214,15 @@ fn analyze(gpx_file: &str, distance: f64, time: i64) {
 
     let (best, best_interval) = compute_best(&points, if time_threshold > 1 { Some(Duration::seconds(time_threshold)) } else { None }, distance_threshold);
     let ele = compute_elevation(&points, best_interval[0], best_interval[1]);
-    let mut message;
+    let message;
     if time > 1 {
     	message = format!("Best for {} time was {}m", format_duration(time_threshold), best);
     } else {
     	message = format!("Best for {}m distance was {}", distance_threshold, format_duration(best as i64));
     }
-    println!("{} ({:.0}d+ / {:.0}d-) in interval {} - {} (start at {}).", 
-    		message, ele[0], ele[1], best_interval[0], best_interval[1], 
-        	format_duration(best_interval[0].signed_duration_since(points[0].1).num_seconds()));
+    println!("{} ({:.0}d+ / {:.0}d-) in interval {} - {} (start at {}).",
+    		message, ele[0], ele[1], best_interval[0], best_interval[1],
+        	format_duration(points[points.len() - 1].1.signed_duration_since(points[0].1).num_seconds()));
 }
 
 fn merge(files: &Vec<&str>, output: &str) {
@@ -231,7 +237,7 @@ fn merge(files: &Vec<&str>, output: &str) {
         let file = File::open(path).unwrap();
         let gpx: Gpx = read(BufReader::new(file)).unwrap();
 
-        let time: DateTime<Utc> = match gpx.metadata { 
+        let time: DateTime<Utc> = match gpx.metadata {
             Some(m) => m.time,
             None => gpx.tracks[0].segments[0].points[0].time,
         }.unwrap();
@@ -247,7 +253,7 @@ fn merge(files: &Vec<&str>, output: &str) {
     let mut gpx_root = Element::parse(buffer_root.as_bytes()).unwrap();
 
     for tuple in sorted_files.iter().skip(1) {
-        let mut trk = gpx_root.get_mut_child("trk").expect("Cannot find 'trk' XML element");
+        let trk = gpx_root.get_mut_child("trk").expect("Cannot find 'trk' XML element");
         let mut f2 = File::open(tuple.1).unwrap();
         let mut buffer_root2 = String::new();
         f2.read_to_string(&mut buffer_root2);
