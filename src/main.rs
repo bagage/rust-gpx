@@ -234,13 +234,19 @@ fn merge(files: &Vec<&str>, output: &str) {
     // sort files by <time> metadata attribute
     let mut sorted_files : Vec<(DateTime<Utc>, &str)> = Vec::new();
     for path in files.iter() {
-        let file = File::open(path).unwrap();
+        let file = match File::open(path) {
+            Ok(file) => file,
+            Err(error) => panic!("Problem opening the file: {:?}", error),
+        };
         let gpx: Gpx = read(BufReader::new(file)).unwrap();
 
         let time: DateTime<Utc> = match gpx.metadata {
-            Some(m) => m.time,
-            None => gpx.tracks[0].segments[0].points[0].time,
-        }.unwrap();
+            Some(m) => match m.time {
+                Some(m) => m,
+                None => gpx.tracks[0].segments[0].points[0].time.unwrap()
+            },
+            None => gpx.tracks[0].segments[0].points[0].time.unwrap()
+        };
 
         let new_elem = (time, *path);
         let pos = sorted_files.binary_search(&new_elem).unwrap_or_else(|e| e);
