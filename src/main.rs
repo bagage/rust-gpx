@@ -240,13 +240,7 @@ fn merge(files: &Vec<&str>, output: &str) {
         };
         let gpx: Gpx = read(BufReader::new(file)).unwrap();
 
-        let time: DateTime<Utc> = match gpx.metadata {
-            Some(m) => match m.time {
-                Some(m) => m,
-                None => gpx.tracks[0].segments[0].points[0].time.unwrap()
-            },
-            None => gpx.tracks[0].segments[0].points[0].time.unwrap()
-        };
+        let time: DateTime<Utc> = gpx.metadata.and_then(|m| m.time).or(gpx.tracks[0].segments[0].points[0].time).unwrap_or_else(|| panic!("No time available in GPX {:?}", path));
 
         let new_elem = (time, *path);
         let pos = sorted_files.binary_search(&new_elem).unwrap_or_else(|e| e);
