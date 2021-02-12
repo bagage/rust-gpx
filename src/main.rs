@@ -1,9 +1,9 @@
-extern crate rquery;
 extern crate chrono;
+extern crate rquery;
 #[macro_use(value_t)]
 extern crate clap;
-extern crate xmltree;
 extern crate gpx;
+extern crate xmltree;
 
 use rquery::Document;
 
@@ -11,17 +11,17 @@ use chrono::prelude::Utc;
 use chrono::DateTime;
 use chrono::Duration;
 
-use std::io::BufReader;
 use std::f64;
+use std::io::BufReader;
 
 use std::collections::HashMap;
 
 use gpx::read;
 use gpx::Gpx;
 
-use xmltree::Element;
 use std::fs::File;
 use std::io::prelude::*;
+use xmltree::Element;
 
 mod cli;
 
@@ -35,9 +35,11 @@ fn distance(a: &Point, b: &Point) -> f64 {
     let r = 6371.;
     let d_lat = (b.lat - a.lat).to_radians();
     let d_lon = (b.lon - a.lon).to_radians();
-    let a = (d_lat / 2.).sin() * (d_lat / 2.).sin() +
-            a.lat.to_radians().cos() * b.lat.to_radians().cos() * (d_lon / 2.).sin() *
-            (d_lon / 2.).sin();
+    let a = (d_lat / 2.).sin() * (d_lat / 2.).sin()
+        + a.lat.to_radians().cos()
+            * b.lat.to_radians().cos()
+            * (d_lon / 2.).sin()
+            * (d_lon / 2.).sin();
     let c = 2. * a.sqrt().atan2((1. - a).sqrt());
     let d = r * c * 1000.; // Distance in meters
 
@@ -48,17 +50,29 @@ fn format_duration(d: i64) -> String {
     let hour = d as i64 / 3600;
     let min = (d as i64 % 3600) / 60;
     let sec = d as i64 % 60;
-    return format!("{}{}{}s", if hour > 0 { format!("{}h", hour) } else { "".to_string() },
-                                          if min > 0 { format!("{}m", min) } else { "".to_string() },
-                                          sec);
+    return format!(
+        "{}{}{}s",
+        if hour > 0 {
+            format!("{}h", hour)
+        } else {
+            "".to_string()
+        },
+        if min > 0 {
+            format!("{}m", min)
+        } else {
+            "".to_string()
+        },
+        sec
+    );
 }
 
-fn compute_elevation(points: &Vec<(Point, DateTime<Utc>)>,
-                     start_time: DateTime<Utc>,
-                     end_time: DateTime<Utc>)
-                     -> [f64; 2] {
-                                // d+ first, then d-
-    let mut results : [f64; 2] = [0.; 2];
+fn compute_elevation(
+    points: &Vec<(Point, DateTime<Utc>)>,
+    start_time: DateTime<Utc>,
+    end_time: DateTime<Utc>,
+) -> [f64; 2] {
+    // d+ first, then d-
+    let mut results: [f64; 2] = [0.; 2];
 
     let mut i = points.iter();
     let mut prev_ele = 0.0;
@@ -72,20 +86,26 @@ fn compute_elevation(points: &Vec<(Point, DateTime<Utc>)>,
 
         if prev_ele != 0. {
             let delta = p1.ele - prev_ele;
-            if delta > 0. { results[0] += delta; } else { results[1] += -delta; }
+            if delta > 0. {
+                results[0] += delta;
+            } else {
+                results[1] += -delta;
+            }
         }
         prev_ele = p1.ele;
     }
     return results;
 }
 
-fn compute_best(points: &Vec<(Point, DateTime<Utc>)>,
-                time_threshold: Option<Duration>,
-                distance_threshold: f64)
-                -> (f64, [DateTime<Utc>; 2]) {
+fn compute_best(
+    points: &Vec<(Point, DateTime<Utc>)>,
+    time_threshold: Option<Duration>,
+    distance_threshold: f64,
+) -> (f64, [DateTime<Utc>; 2]) {
     let time_mode = time_threshold != None;
     //FIXME: proper Null initialization?
-    let mut best_interval : [DateTime<Utc>; 2] = ["2017-06-27T18:16:08Z".parse::<DateTime<Utc>>().unwrap(); 2];
+    let mut best_interval: [DateTime<Utc>; 2] =
+        ["2017-06-27T18:16:08Z".parse::<DateTime<Utc>>().unwrap(); 2];
     let mut best: f64 = if time_mode { 0.0 } else { f64::INFINITY };
 
     let mut i = points.iter();
@@ -149,7 +169,7 @@ fn info(gpx_file: &str) {
 
     let gpx_stats: HashMap<&str, f64> = HashMap::new();
 
-    println!("File: {file}", file=gpx_file);
+    println!("File: {file}", file = gpx_file);
     for track in gpx.tracks {
         for segment in track.segments {
             let mut segment_stats: HashMap<&str, f64> = HashMap::new();
@@ -183,7 +203,6 @@ fn info(gpx_file: &str) {
             for (key, value) in segment_stats {
                 println!("\t\t{}: {}", key, value);
             }
-
         }
     }
     for (key, value) in gpx_stats {
@@ -193,46 +212,81 @@ fn info(gpx_file: &str) {
 
 fn analyze(gpx_file: &str, distance: f64, time: i64) {
     let document = Document::new_from_xml_file(gpx_file).unwrap();
-    let points: Vec<(Point, DateTime<Utc>)> = document.select_all("trkpt")
+    let points: Vec<(Point, DateTime<Utc>)> = document
+        .select_all("trkpt")
         .unwrap()
         .map(|el| {
             let lat: f64 = el.attr("lat").unwrap().to_string().parse::<f64>().unwrap();
             let lon: f64 = el.attr("lon").unwrap().to_string().parse::<f64>().unwrap();
             let ele: f64 = el.select("ele").unwrap().text().parse::<f64>().unwrap();
-            let time = el.select("time").unwrap().text().parse::<DateTime<Utc>>().unwrap();
-            (Point {
-                 lat: lat,
-                 lon: lon,
-                 ele: ele,
-             },
-             time)
+            let time = el
+                .select("time")
+                .unwrap()
+                .text()
+                .parse::<DateTime<Utc>>()
+                .unwrap();
+            (
+                Point {
+                    lat: lat,
+                    lon: lon,
+                    ele: ele,
+                },
+                time,
+            )
         })
         .collect();
 
     let distance_threshold = distance;
     let time_threshold = time;
 
-    let (best, best_interval) = compute_best(&points, if time_threshold > 1 { Some(Duration::seconds(time_threshold)) } else { None }, distance_threshold);
+    let (best, best_interval) = compute_best(
+        &points,
+        if time_threshold > 1 {
+            Some(Duration::seconds(time_threshold))
+        } else {
+            None
+        },
+        distance_threshold,
+    );
     let ele = compute_elevation(&points, best_interval[0], best_interval[1]);
     let message;
     if time > 1 {
-    	message = format!("Best for {} time was {}m", format_duration(time_threshold), best);
+        message = format!(
+            "Best for {} time was {}m",
+            format_duration(time_threshold),
+            best
+        );
     } else {
-    	message = format!("Best for {}m distance was {}", distance_threshold, format_duration(best as i64));
+        message = format!(
+            "Best for {}m distance was {}",
+            distance_threshold,
+            format_duration(best as i64)
+        );
     }
-    println!("{} ({:.0}d+ / {:.0}d-) in interval {} - {} (start at {}).",
-    		message, ele[0], ele[1], best_interval[0], best_interval[1],
-        	format_duration(points[points.len() - 1].1.signed_duration_since(points[0].1).num_seconds()));
+    println!(
+        "{} ({:.0}d+ / {:.0}d-) in interval {} - {} (start at {}).",
+        message,
+        ele[0],
+        ele[1],
+        best_interval[0],
+        best_interval[1],
+        format_duration(
+            points[points.len() - 1]
+                .1
+                .signed_duration_since(points[0].1)
+                .num_seconds()
+        )
+    );
 }
 
 fn merge(files: &Vec<&str>, output: &str) {
     if files.len() < 2 {
         println!("Expected at least 2 files, got {}", files.len());
-        return
+        return;
     }
 
     // sort files by <time> metadata attribute
-    let mut sorted_files : Vec<(DateTime<Utc>, &str)> = Vec::new();
+    let mut sorted_files: Vec<(DateTime<Utc>, &str)> = Vec::new();
     for path in files.iter() {
         let file = match File::open(path) {
             Ok(file) => file,
@@ -240,7 +294,11 @@ fn merge(files: &Vec<&str>, output: &str) {
         };
         let gpx: Gpx = read(BufReader::new(file)).unwrap();
 
-        let time: DateTime<Utc> = gpx.metadata.and_then(|m| m.time).or(gpx.tracks[0].segments[0].points[0].time).unwrap_or_else(|| panic!("No time available in GPX {:?}", path));
+        let time: DateTime<Utc> = gpx
+            .metadata
+            .and_then(|m| m.time)
+            .or(gpx.tracks[0].segments[0].points[0].time)
+            .unwrap_or_else(|| panic!("No time available in GPX {:?}", path));
 
         let new_elem = (time, *path);
         let pos = sorted_files.binary_search(&new_elem).unwrap_or_else(|e| e);
@@ -253,19 +311,22 @@ fn merge(files: &Vec<&str>, output: &str) {
     let mut gpx_root = Element::parse(buffer_root.as_bytes()).unwrap();
 
     for tuple in sorted_files.iter().skip(1) {
-        let trk = gpx_root.get_mut_child("trk").expect("Cannot find 'trk' XML element");
+        let trk = gpx_root
+            .get_mut_child("trk")
+            .expect("Cannot find 'trk' XML element");
         let mut f2 = File::open(tuple.1).unwrap();
         let mut buffer_root2 = String::new();
         f2.read_to_string(&mut buffer_root2);
 
         let gpx_root2 = Element::parse(buffer_root2.as_bytes()).unwrap();
         {
-            let trk2 = gpx_root2.get_child("trk").expect("Cannot find 'trk' XML element");
+            let trk2 = gpx_root2
+                .get_child("trk")
+                .expect("Cannot find 'trk' XML element");
             for trkpt2 in trk2.children.clone() {
                 trk.children.push(trkpt2);
             }
         }
-
     }
 
     let output_file = File::create(output).unwrap();
@@ -277,10 +338,15 @@ fn main() {
     let matches = cli::build_cli().get_matches();
 
     match matches.subcommand() {
-         ("analyze", Some(analyze_matches)) => analyze(analyze_matches.value_of("gpx-file").unwrap(),
-                value_t!(analyze_matches, "distance", f64).unwrap_or(0.),
-                value_t!(analyze_matches, "time", i64).unwrap_or(0)),
-        ("merge", Some(merge_matches)) => merge(&merge_matches.values_of("gpx-files").unwrap().collect(), &merge_matches.value_of("output-file").unwrap()),
+        ("analyze", Some(analyze_matches)) => analyze(
+            analyze_matches.value_of("gpx-file").unwrap(),
+            value_t!(analyze_matches, "distance", f64).unwrap_or(0.),
+            value_t!(analyze_matches, "time", i64).unwrap_or(0),
+        ),
+        ("merge", Some(merge_matches)) => merge(
+            &merge_matches.values_of("gpx-files").unwrap().collect(),
+            &merge_matches.value_of("output-file").unwrap(),
+        ),
         ("info", Some(info_matches)) => info(info_matches.value_of("gpx-file").unwrap()),
         ("", None) => println!("No command requested"),
         _ => unreachable!(),
